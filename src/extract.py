@@ -1,8 +1,7 @@
 import requests
 import sys
-import pandas as pd
 
-from datetime import date, datetime
+from datetime import date
 from requests import Response
 from settings import LocationDetails
 from logger import setup_logger
@@ -26,7 +25,6 @@ def get_sydney_uv_index_data():
     except Exception as err:
         logger.error(f"An error occurred in getting uv index data: {err}")
         sys.exit(1)
-    # print(get_sydney_uv_index_data.__name__)
 
 
 def create_query_string() -> str:
@@ -35,15 +33,10 @@ def create_query_string() -> str:
         res += detail + "="
         if detail == "date":
             res += str(date.today().year)
-        elif detail == "loc":
-            res += "yes"
-        elif detail == "Event":
-            res += str(1)
-            break
         else:
             res += location_details[detail]
         res += "&"
-    return res
+    return res[:-1]
 
 def get_sunrise_sunset_times():
     request = {"type":"sunrisenset",
@@ -53,24 +46,8 @@ def get_sunrise_sunset_times():
         response : Response = requests.post(url, json = request)
         response.raise_for_status()
         time_json = response.json()
-        return time_json
+        list_of_time_jsons = time_json['response']['events'][0]['data']
+        return list_of_time_jsons
     except Exception as err:
         logger.error(f"An error occurred in getting sunrise and sunset times: {err}")
         sys.exit(1)
-
-def main():
-    print(datetime.now())
-    uv_data = get_sydney_uv_index_data()
-    uv_graph_df = pd.DataFrame(uv_data['GraphData'])
-    uv_graph_df = uv_graph_df.drop(columns=['$id'])
-    uv_graph_df['Date'] = pd.to_datetime(uv_graph_df['Date'])
-    uv_table_df = pd.DataFrame(uv_data['TableData'])
-    uv_table_df = uv_table_df.drop(columns=['$id'])
-    uv_graph_df.to_excel('test.xlsx', index=False)
-
-
-    for key, item in uv_data.items():
-        print(key, item)
-
-if __name__ == "__main__":
-    main()

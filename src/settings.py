@@ -9,6 +9,8 @@ class LocationDetails(BaseSettings):
     longhemi : str
     lathemi : str
     timezone : str
+    loc : str
+    Event : str
 
     class Config:
         env_file= ".env"
