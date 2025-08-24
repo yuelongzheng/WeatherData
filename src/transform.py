@@ -1,14 +1,18 @@
 import pandas as pd
+import datetime as dt
 
-from extract import get_sydney_uv_index_data, get_sunrise_sunset_times
+from extract import get_uv_index_dataframe, get_sunrise_sunset_times
 from datetime import date, datetime, timedelta
+from logger import setup_logger
 
 current_year = date.today().year
 spreadsheet_name = "WeatherData.xlsx"
 sheetnames : dict[str,str] = {"uv" : "UV Index Data",
-                              "sunrise_sunset_times" : str(current_year) + " Sunrise Sunset Times" }
+                              "sunrise_sunset_times" : "Sunrise Sunset Times" }
 sunrise_sunset_columns = {'month':"Month", 'day':'Day', 'rise':'Rise',
                           'rise_day':'Rise_Day', 'set':'Set', 'set_day':'Set_Day'}
+logger = setup_logger(__name__)
+
 def check_spreadsheet_exists():
     try:
         pd.read_excel(spreadsheet_name)
@@ -19,31 +23,22 @@ def check_spreadsheet_exists():
                 empty.to_excel(writer, sheet_name=sheetname)
 
 def update_uv_index_data():
-    uv_data = get_sydney_uv_index_data()
-    uv_graph_df = pd.DataFrame(uv_data['GraphData'])
-    uv_graph_df = uv_graph_df.drop(columns=['$id'])
-    uv_graph_df['Date'] = pd.to_datetime(uv_graph_df['Date'])
-    current_uv_graph_df = pd.read_excel(spreadsheet_name, sheet_name=sheetnames['uv'])
-    last_row = current_uv_graph_df.shape[0] - 1
-
-    if last_row == -1:
-        uv_graph_df.to_excel(spreadsheet_name, sheet_name=sheetnames['uv'], index = False)
-        return None
-
-    last_time = current_uv_graph_df['Date'][last_row]
-    first_time = uv_graph_df['Date'][0]
-    if first_time > last_time:
-        current_uv_graph_df = pd.concat([current_uv_graph_df,uv_graph_df])
-    else:
-        first_na_value_index = current_uv_graph_df['Measured'].isna().idxmax()
-        cutoff_date = current_uv_graph_df.loc[first_na_value_index]['Date']
-        uv_graph_df = pd.DataFrame(uv_graph_df[uv_graph_df['Date'] >= cutoff_date])
-        uv_graph_rows = uv_graph_df.shape[0]
-        new_index = list(range(first_na_value_index, first_na_value_index + uv_graph_rows))
-        uv_graph_df.index = new_index
-        current_uv_graph_df = current_uv_graph_df.combine_first(uv_graph_df)
-    current_uv_graph_df.to_excel(spreadsheet_name, sheet_name = sheetnames['uv'], index = False)
-    return None
+    current_uv_graph_df : pd.DataFrame = pd.read_excel(spreadsheet_name, sheet_name=sheetnames['uv'])
+    first_na_index : int = current_uv_graph_df['Measured'].isna().idxmax()
+    start_dateTime : pd.Timestamp = current_uv_graph_df.loc[first_na_index]['DateTime'] if first_na_index != 0 else \
+                                     current_uv_graph_df['Date'].iat[-1] + pd.Timedelta(days=1)
+    start_date : dt.date = start_dateTime.date()
+    today_date : dt.date = dt.date.today()
+    datetime_index : pd.DatetimeIndex = pd.date_range(start_date, today_date)
+    scrape_df = get_uv_index_dataframe(datetime_index)
+    scrape_df = scrape_df.drop(columns=['$id'])
+    scrape_df['DateTime'] = pd.to_datetime(scrape_df['Date'])
+    scrape_df['Date'] = pd.to_datetime(scrape_df['DateTime'].dt.date)
+    scrape_df = pd.DataFrame(scrape_df[scrape_df['DateTime'] >= start_dateTime])
+    scrape_df.index = list(range(first_na_index, first_na_index + scrape_df.shape[0])) if first_na_index != 0 else \
+                      list(range(current_uv_graph_df.shape[0], current_uv_graph_df.shape[0] + scrape_df.shape[0]))
+    current_uv_graph_df = current_uv_graph_df.combine_first(scrape_df)
+    write_to_excel(spreadsheet_name, sheetnames['uv'], current_uv_graph_df)
 
 def get_first_sunday(year, month):
     day, sunday = 7, 6
@@ -55,8 +50,7 @@ def get_first_sunday(year, month):
 
 def convert_to_date_time(df, col):
     df[col] = df[col].str[:2] + ":" + df[col].str[2:4]
-    df[col] = pd.to_datetime(df[col], format="%H:%M").dt.strftime('%I:%M %p')
-    df[col] = pd.to_datetime((df['Date'].dt.strftime('%d/%m/%Y') + " " +  df[col]), format = '%d/%m/%Y %I:%M %p')
+    df[col] = pd.to_datetime((df['Date'].dt.strftime('%d/%m/%Y') + " " +  df[col]), format = '%d/%m/%Y %H:%M')
 
 def transform_aedt_times(df, mask, col):
     mask_df = df[mask]
@@ -76,11 +70,18 @@ def get_sunrise_sunset_time_df():
     aedt_mask = (time_df['Date'] < first_april_sunday) | (time_df['Date'] >= first_october_sunday)
     transform_aedt_times(time_df,aedt_mask,'Rise')
     transform_aedt_times(time_df,aedt_mask,'Set')
-    time_df = time_df.drop(columns = ['Month', 'Day', 'Rise_Day', 'Set_Day', 'Year', 'Date'])
-    print(time_df)
-    print(time_df.dtypes)
-    # time_df.to_excel("test.xlsx", sheet_name= sheetnames['sunrise_sunset_times'], index = False)
-    # time_df.to_excel(spreadsheet_name, sheet_name= sheetnames['sunrise_sunset_times'], index = False)
+    time_df = time_df.drop(columns = ['Month', 'Day', 'Rise_Day', 'Set_Day', 'Year'])
+    write_to_excel(spreadsheet_name, sheetnames['sunrise_sunset_times'], time_df)
+
+def write_to_excel(filename,sheetname,df):
+    with pd.ExcelWriter(filename, engine='openpyxl', mode='a') as writer:
+        workbook = writer.book
+        try:
+            workbook.remove(workbook[sheetname])
+        except Exception as err:
+            logger.error(f"Write to excel error: {err}")
+        finally:
+            df.to_excel(writer, sheet_name=sheetname,index= False)
 
 
 def load_sunrise_sunset_times():
@@ -95,10 +96,9 @@ def load_sunrise_sunset_times():
 
 
 def main():
+    check_spreadsheet_exists()
+    update_uv_index_data()
     get_sunrise_sunset_time_df()
-    # check_spreadsheet_exists()
-    # update_uv_index_data()
-    # get_sunrise_sunset_time_df()
 
 if __name__ == "__main__":
     main()

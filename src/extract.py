@@ -1,7 +1,8 @@
 import requests
 import sys
+import datetime as dt
+import pandas as pd
 
-from datetime import date
 from requests import Response
 from settings import LocationDetails
 from logger import setup_logger
@@ -13,26 +14,32 @@ query_details : list[str] = ["longdeg", "longmin", "latdeg",
                              "lathemi", "loc", "timezone",
                              "date", "Event"]
 
-def get_sydney_uv_index_data():
-    local_date_today : date = date.today()
+def get_sydney_uv_index_data(date : dt.date) -> pd.DataFrame:
     url : str = ("https://uvdata.arpansa.gov.au/api/uvlevel/?longitude=151.1&latitude=-34.04&date="
-                 + str(local_date_today))
+                 + str(date))
     try :
         response : Response = requests.get(url)
         response.raise_for_status()
         json = response.json()
-        return json
+        graph_data = json['GraphData']
+        return pd.DataFrame(graph_data)
     except Exception as err:
         logger.error(f"An error occurred in getting uv index data: {err}")
         sys.exit(1)
 
+def get_uv_index_dataframe(datetime_index : pd.DatetimeIndex):
+    scrape_df : pd.DataFrame = pd.DataFrame()
+    for timestamp in datetime_index:
+        tmp : pd.DataFrame = get_sydney_uv_index_data(timestamp.date())
+        scrape_df : pd.DataFrame = tmp if scrape_df.empty else pd.concat([scrape_df, tmp])
+    return scrape_df
 
 def create_query_string() -> str:
     res = ""
     for detail in query_details:
         res += detail + "="
         if detail == "date":
-            res += str(date.today().year)
+            res += str(dt.date.today().year)
         else:
             res += location_details[detail]
         res += "&"
