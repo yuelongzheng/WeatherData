@@ -27,7 +27,7 @@ def get_sydney_uv_index_data(date : dt.date) -> pd.DataFrame:
         logger.error(f"An error occurred in getting uv index data: {err}")
         sys.exit(1)
 
-def get_uv_index_dataframe(datetime_index : pd.DatetimeIndex):
+def get_uv_index_dataframe(datetime_index : pd.DatetimeIndex) -> pd.DataFrame:
     scrape_df : pd.DataFrame = pd.DataFrame()
     for timestamp in datetime_index:
         tmp : pd.DataFrame = get_sydney_uv_index_data(timestamp.date())
@@ -45,7 +45,7 @@ def create_query_string() -> str:
         res += "&"
     return res[:-1]
 
-def get_sunrise_sunset_times():
+def get_sunrise_sunset_times_dataframe() -> pd.DataFrame:
     request = {"type":"sunrisenset",
                "query": create_query_string()}
     url = "https://api.geodesyapps.ga.gov.au/astronomical/submitRequest"
@@ -54,7 +54,7 @@ def get_sunrise_sunset_times():
         response.raise_for_status()
         time_json = response.json()
         list_of_time_jsons = time_json['response']['events'][0]['data']
-        return list_of_time_jsons
+        return pd.DataFrame(list_of_time_jsons)
     except Exception as err:
         logger.error(f"An error occurred in getting sunrise and sunset times: {err}")
         sys.exit(1)
