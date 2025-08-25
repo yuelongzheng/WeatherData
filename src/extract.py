@@ -2,6 +2,7 @@ import requests
 import sys
 import datetime as dt
 import pandas as pd
+import xml.etree.ElementTree as ET
 
 from requests import Response
 from settings import LocationDetails
@@ -58,3 +59,30 @@ def get_sunrise_sunset_times_dataframe() -> pd.DataFrame:
     except Exception as err:
         logger.error(f"An error occurred in getting sunrise and sunset times: {err}")
         sys.exit(1)
+
+def parse_forecast_xml():
+    tree = ET.parse('IDN11060.xml')
+    root = tree.getroot()
+    forecasts = root.find('forecast')
+    forecast_area : ET.Element = ET.Element('None')
+    for area in forecasts:
+        if area.attrib['description'] == 'Sydney Olympic Park':
+            forecast_area = area
+    list_of_dict = []
+    for forecast_period in forecast_area:
+        temp_dict = forecast_period.attrib
+        for forecast in forecast_period:
+            temp_dict[forecast.attrib['type']] = forecast.text
+        list_of_dict.append(temp_dict)
+    df = pd.DataFrame(list_of_dict)
+    drop_columns = ['index', 'start-time-utc', 'end-time-utc',
+                    'forecast_icon_code']
+    df = df.drop(columns=drop_columns)
+    for column_name in df.columns:
+        print(df[column_name])
+
+def main():
+    parse_forecast_xml()
+
+if __name__ == "__main__":
+    main()
