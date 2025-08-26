@@ -3,3 +3,4 @@ src/app.log
 src/*.xlsx
 src/*.xml
 src/*.*.json
+/resources

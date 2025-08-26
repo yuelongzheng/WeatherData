@@ -9,6 +9,7 @@ from settings import LocationDetails
 from logger import setup_logger
 from ftplib import FTP
 from io import BytesIO
+from pathlib import Path
 
 location_details = LocationDetails().model_dump()
 logger = setup_logger(__name__)
@@ -16,6 +17,9 @@ query_details : list[str] = ["longdeg", "longmin", "latdeg",
                              "latmin", "location", "longhemi",
                              "lathemi", "loc", "timezone",
                              "date", "Event"]
+ftp_server : str = "ftp.bom.gov.au"
+resources_path = Path(__file__).parent.parent/'resources'
+radar_transparencies_files = ['IDR.legend.0.png', 'IDR714.background.png', 'IDR714.locations.png', 'IDR714.topography.png']
 
 def get_sydney_uv_index_data(date : dt.date) -> pd.DataFrame:
     url : str = ("https://uvdata.arpansa.gov.au/api/uvlevel/?longitude=151.1&latitude=-34.04&date="
@@ -63,7 +67,6 @@ def get_sunrise_sunset_times_dataframe() -> pd.DataFrame:
         sys.exit(1)
 
 def get_forecast_xml() -> ET.ElementTree:
-    ftp_server : str = "ftp.bom.gov.au"
     ftp_directory : str = "/anon/gen/fwo"
     sydney_forecast_file : str = 'IDN11060.xml'
     with FTP(ftp_server) as ftp:
@@ -74,8 +77,8 @@ def get_forecast_xml() -> ET.ElementTree:
             ftp.retrbinary(f'RETR {sydney_forecast_file}', reader.write)
             forecast_str = reader.getvalue().decode('utf-8')
             return ET.ElementTree(ET.fromstring(forecast_str))
-        except Exception as e:
-            logger.error(f"An error occurred in getting the forecast file: {e}")
+        except Exception as err:
+            logger.error(f"An error occurred in getting the forecast file: {err}")
             sys.exit(1)
 
 
@@ -109,11 +112,50 @@ def get_observation_json():
                  'weather','wind_dir','wind_spd_kmh']]
         print(df)
 
+def get_radar_images():
+    ftp_directory : str = '/anon/gen/radar'
+    path = resources_path/'radar'
+    path.mkdir(parents=True,exist_ok=True)
+    radar_product = 'IDR714'
+    with FTP(ftp_server) as ftp:
+        ftp.login()
+        ftp.cwd(ftp_directory)
+        image_list = [image for image in ftp.nlst() if radar_product in image and 'png' in image]
+        try:
+            for image in image_list:
+                temp_path = path/image
+                file = temp_path.open('wb')
+                ftp.retrbinary(f'RETR {image}', file.write)
+                file.close()
+        except Exception as err:
+            logger.error(f'An error occurred in getting the radar file : {err}')
+
+def get_radar_transparencies():
+    ftp_directory : str = '/anon/gen/radar_transparencies'
+    path = resources_path/'radar_transparencies'
+    path.mkdir(parents=True,exist_ok=True)
+    with FTP(ftp_server) as ftp:
+        ftp.login()
+        ftp.cwd(ftp_directory)
+        try:
+            for image in radar_transparencies_files:
+                temp_path = path/image
+                file = temp_path.open('wb')
+                ftp.retrbinary(f'RETR {image}', file.write)
+                file.close()
+        except Exception as err:
+            logger.error(f'An error occurred in getting the radar transparencies : {err}')
+
 
 def main():
-    df = parse_forecast_xml()
-    for column in df.columns:
-        print(df[column])
+    get_radar_images()
+    get_radar_transparencies()
+    # df = parse_forecast_xml()
+    # for column in df.columns:
+    #     print(df[column])
+    # df = df.dropna(subset=['air_temperature_minimum'])
+    # for column in df.columns:
+    #     print(df[column])
     # get_observation_json()
 
 if __name__ == "__main__":
