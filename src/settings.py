@@ -11,7 +11,8 @@ class LocationDetails(BaseSettings):
     timezone : str
     loc : str
     Event : str
+    station : str
 
     class Config:
-        env_file= ".env"
+        env_file= ".locationdetails.env"
         env_file_encoding = "utf-8"

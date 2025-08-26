@@ -1,4 +1,5 @@
-src/.env
+src/.locationdetails.env
 src/app.log
 src/*.xlsx
 src/*.xml
+src/*.*.json
