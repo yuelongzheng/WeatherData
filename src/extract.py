@@ -102,15 +102,20 @@ def parse_forecast_xml() -> pd.DataFrame:
     df = df.drop(columns=drop_columns)
     return df
 
-def get_observation_json():
-    with open('IDN60901.95765.json', 'r') as file:
-        observations = json.load(file)
-        df = pd.DataFrame(observations['observations']['data'])
+def get_observation_df():
+    try:
+        r = requests.get(location_details['station_observation_url'])
+        r.raise_for_status()
+        observations= r.json()['observations']['data']
+        df = pd.DataFrame(observations)
         df = df[['local_date_time_full', 'apparent_t', 'cloud',
                  'delta_t','gust_kmh','air_temp',
                  'dewpt', 'rain_trace', 'rel_hum',
                  'weather','wind_dir','wind_spd_kmh']]
-        print(df)
+        return df
+    except Exception as err:
+        logger.error(f'An error occurred in getting observation data: {err}')
+
 
 def get_radar_images():
     ftp_directory : str = '/anon/gen/radar'
@@ -146,17 +151,8 @@ def get_radar_transparencies():
         except Exception as err:
             logger.error(f'An error occurred in getting the radar transparencies : {err}')
 
-
-def main():
-    get_radar_images()
-    get_radar_transparencies()
-    # df = parse_forecast_xml()
-    # for column in df.columns:
-    #     print(df[column])
-    # df = df.dropna(subset=['air_temperature_minimum'])
-    # for column in df.columns:
-    #     print(df[column])
-    # get_observation_json()
-
-if __name__ == "__main__":
-    main()
+# def main():
+#
+#
+# if __name__ == "__main__":
+#     main()

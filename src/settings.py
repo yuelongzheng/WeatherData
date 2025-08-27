@@ -12,6 +12,7 @@ class LocationDetails(BaseSettings):
     loc : str
     Event : str
     station : str
+    station_observation_url : str
 
     class Config:
         env_file= ".locationdetails.env"

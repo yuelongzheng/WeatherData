@@ -69,6 +69,12 @@ def transform_aedt_times(df :pd.DataFrame , mask : 'pd.Series[bool]', col : str)
     mask_df = df[mask]
     df.loc[mask, col] = mask_df[col] + dt.timedelta(hours=1)
 
+def create_time_df(df : pd.DataFrame, col : str):
+    transform_df : pd.DataFrame = df.copy()
+    transform_df['Time'] = df[col].dt.time
+    transform_df['Sunrise/Sunset'] = 'Sun' + col.lower()
+    transform_df = transform_df.drop(columns=['Rise','Set'])
+    return transform_df
 
 def transform_sunrise_sunset_time_df(time_df : pd.DataFrame, year : int) -> pd.DataFrame:
     time_df = time_df.rename(columns=sunrise_sunset_columns)
@@ -83,6 +89,9 @@ def transform_sunrise_sunset_time_df(time_df : pd.DataFrame, year : int) -> pd.D
     transform_aedt_times(time_df,aedt_mask,'Rise')
     transform_aedt_times(time_df,aedt_mask,'Set')
     time_df = time_df.drop(columns = ['Month', 'Day', 'Rise_Day', 'Set_Day', 'Year'])
+    sunrise_df = create_time_df(time_df, 'Rise')
+    sunset_df = create_time_df(time_df, 'Set')
+    time_df = pd.concat([sunrise_df,sunset_df])
     return time_df
 
 
