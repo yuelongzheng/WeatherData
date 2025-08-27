@@ -151,8 +151,12 @@ def get_radar_transparencies():
         except Exception as err:
             logger.error(f'An error occurred in getting the radar transparencies : {err}')
 
-# def main():
-#
-#
-# if __name__ == "__main__":
-#     main()
+def main():
+    df = parse_forecast_xml()
+    print(df)
+    for column in df.columns:
+        print(df.loc[df.index, column])
+    print(df.loc[df.index,['start-time-local','end-time-local']])
+
+if __name__ == "__main__":
+    main()

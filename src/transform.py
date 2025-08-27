@@ -5,23 +5,28 @@ from extract import get_sydney_uv_index_data, get_uv_index_dataframe, get_sunris
 from logger import setup_logger
 
 current_date : dt.date = dt.date.today()
-current_year : int = dt.date.today().year
 spreadsheet_name : str = "WeatherData.xlsx"
-sheetnames : dict[str,str] = {"uv" : "UV Index Data",
-                              "sunrise_sunset_times" : "Sunrise Sunset Times" }
+sheet_names : dict[str,str] = {"uv" : "UV Index Data",
+                              "sunrise_sunset_times" : "Sunrise Sunset Times"}
 sunrise_sunset_columns : dict[str,str] = {'month':"Month", 'day':'Day', 'rise':'Rise',
                                           'rise_day':'Rise_Day', 'set':'Set', 'set_day':'Set_Day'}
 logger = setup_logger(__name__)
 
 def check_spreadsheet_exists():
+    empty = pd.DataFrame()
     try:
-        pd.read_excel(spreadsheet_name)
+        file = pd.ExcelFile(spreadsheet_name)
+        current_sheet_names = file.sheet_names
+        add = []
+        for sheet_name in sheet_names.values():
+            if sheet_name not in current_sheet_names:
+                add.append(sheet_name)
+        for sheet_name in add:
+            write_to_excel(spreadsheet_name, sheet_name, empty)
     except Exception as err:
-        empty = pd.DataFrame()
         with pd.ExcelWriter(spreadsheet_name) as writer:
-            for sheetname in sheetnames.values():
-                empty.to_excel(writer, sheet_name=sheetname)
-
+            for sheet_name in sheet_names.values():
+                empty.to_excel(writer, sheet_name=sheet_name)
 
 def transform_uv_index_df(df : pd.DataFrame):
     df = df.drop(columns=['$id'])
@@ -31,7 +36,7 @@ def transform_uv_index_df(df : pd.DataFrame):
 
 
 def update_uv_index_data():
-    current_uv_graph_df : pd.DataFrame = pd.read_excel(spreadsheet_name, sheet_name=sheetnames['uv'])
+    current_uv_graph_df : pd.DataFrame = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['uv'])
     today_date : dt.date = dt.date.today()
     if not current_uv_graph_df.empty:
         first_na_index : int = current_uv_graph_df['Measured'].isna().idxmax()
@@ -48,7 +53,7 @@ def update_uv_index_data():
     else:
         current_uv_graph_df = get_sydney_uv_index_data(today_date)
         current_uv_graph_df = transform_uv_index_df(current_uv_graph_df)
-    write_to_excel(spreadsheet_name, sheetnames['uv'], current_uv_graph_df)
+    write_to_excel(spreadsheet_name, sheet_names['uv'], current_uv_graph_df)
 
 
 def get_first_sunday(year : int, month : int):
@@ -70,10 +75,10 @@ def transform_aedt_times(df :pd.DataFrame , mask : 'pd.Series[bool]', col : str)
     df.loc[mask, col] = mask_df[col] + dt.timedelta(hours=1)
 
 def create_time_df(df : pd.DataFrame, col : str):
-    transform_df : pd.DataFrame = df.copy()
-    transform_df['Time'] = df[col].dt.time
+    transform_df : pd.DataFrame = df.loc[df.index, [col, 'Date']]
+    transform_df['Time'] = transform_df[col].dt.time
     transform_df['Sunrise/Sunset'] = 'Sun' + col.lower()
-    transform_df = transform_df.drop(columns=['Rise','Set'])
+    transform_df = transform_df.drop(columns=[col])
     return transform_df
 
 def transform_sunrise_sunset_time_df(time_df : pd.DataFrame, year : int) -> pd.DataFrame:
@@ -83,8 +88,8 @@ def transform_sunrise_sunset_time_df(time_df : pd.DataFrame, year : int) -> pd.D
     convert_to_date_time(time_df, 'Rise')
     convert_to_date_time(time_df, 'Set')
     april,october = 4, 10
-    first_april_sunday = get_first_sunday(current_year,april)
-    first_october_sunday = get_first_sunday(current_year,october)
+    first_april_sunday = get_first_sunday(current_date.year,april)
+    first_october_sunday = get_first_sunday(current_date.year,october)
     aedt_mask = (time_df['Date'] < first_april_sunday) | (time_df['Date'] >= first_october_sunday)
     transform_aedt_times(time_df,aedt_mask,'Rise')
     transform_aedt_times(time_df,aedt_mask,'Set')
@@ -96,25 +101,31 @@ def transform_sunrise_sunset_time_df(time_df : pd.DataFrame, year : int) -> pd.D
 
 
 def update_sunrise_sunset_times():
-    current_time_df :pd.DataFrame = pd.read_excel(spreadsheet_name, sheet_name=sheetnames['sunrise_sunset_times'])
+    current_time_df :pd.DataFrame = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['sunrise_sunset_times'])
     last_date_year : int = current_time_df['Date'].iat[-1].year if not current_time_df.empty else 0
-    if last_date_year != current_date.year or current_date.month == 12:
-        required_year : int = current_date.year if last_date_year == 0 or current_date.month != 12 else current_date.year + 1
-        time_df : pd.DataFrame = get_sunrise_sunset_times_dataframe(required_year)
-        time_df : pd.DataFrame  = transform_sunrise_sunset_time_df(time_df, required_year)
+    if last_date_year <= current_date.year:
+        time_df : pd.DataFrame = pd.DataFrame()
+        required_year : int = current_date.year
+        if last_date_year < current_date.year:
+            time_df : pd.DataFrame = get_sunrise_sunset_times_dataframe(required_year)
+            time_df : pd.DataFrame  = transform_sunrise_sunset_time_df(time_df, required_year)
+        if current_date.month == 12:
+            next_year_time_df : pd.DataFrame = get_sunrise_sunset_times_dataframe(required_year + 1)
+            next_year_time_df : pd.DataFrame = transform_sunrise_sunset_time_df(next_year_time_df, required_year + 1)
+            time_df = pd.concat([time_df, next_year_time_df])
         current_time_df : pd.DataFrame = pd.concat([current_time_df, time_df])
-        write_to_excel(spreadsheet_name, sheetnames['sunrise_sunset_times'],current_time_df)
+        write_to_excel(spreadsheet_name, sheet_names['sunrise_sunset_times'],current_time_df)
 
 
-def write_to_excel(filename,sheetname,df):
+def write_to_excel(filename,sheet_name,df):
     with pd.ExcelWriter(filename, engine='openpyxl', mode='a') as writer:
         workbook = writer.book
         try:
-            workbook.remove(workbook[sheetname])
+            workbook.remove(workbook[sheet_name])
         except Exception as err:
             logger.error(f"Write to excel error: {err}")
         finally:
-            df.to_excel(writer, sheet_name=sheetname,index= False)
+            df.to_excel(writer, sheet_name=sheet_name,index= False)
 
 
 def main():
