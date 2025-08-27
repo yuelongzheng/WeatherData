@@ -4,6 +4,7 @@ import datetime as dt
 from extract import get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe
 from logger import setup_logger
 
+current_date : dt.date = dt.date.today()
 current_year : int = dt.date.today().year
 spreadsheet_name : str = "WeatherData.xlsx"
 sheetnames : dict[str,str] = {"uv" : "UV Index Data",
@@ -69,9 +70,9 @@ def transform_aedt_times(df :pd.DataFrame , mask : 'pd.Series[bool]', col : str)
     df.loc[mask, col] = mask_df[col] + dt.timedelta(hours=1)
 
 
-def transform_sunrise_sunset_time_df(time_df : pd.DataFrame) -> pd.DataFrame:
+def transform_sunrise_sunset_time_df(time_df : pd.DataFrame, year : int) -> pd.DataFrame:
     time_df = time_df.rename(columns=sunrise_sunset_columns)
-    time_df['Year'] = current_year
+    time_df['Year'] = year
     time_df['Date'] = pd.to_datetime(time_df[['Year', 'Month', 'Day']])
     convert_to_date_time(time_df, 'Rise')
     convert_to_date_time(time_df, 'Set')
@@ -88,10 +89,11 @@ def transform_sunrise_sunset_time_df(time_df : pd.DataFrame) -> pd.DataFrame:
 def update_sunrise_sunset_times():
     current_time_df :pd.DataFrame = pd.read_excel(spreadsheet_name, sheet_name=sheetnames['sunrise_sunset_times'])
     last_date_year : int = current_time_df['Date'].iat[-1].year if not current_time_df.empty else 0
-    if last_date_year != current_year :
-        time_df = get_sunrise_sunset_times_dataframe()
-        time_df = transform_sunrise_sunset_time_df(time_df)
-        current_time_df = pd.concat([current_time_df, time_df])
+    if last_date_year != current_date.year or current_date.month == 12:
+        required_year : int = current_date.year if last_date_year == 0 or current_date.month != 12 else current_date.year + 1
+        time_df : pd.DataFrame = get_sunrise_sunset_times_dataframe(required_year)
+        time_df : pd.DataFrame  = transform_sunrise_sunset_time_df(time_df, required_year)
+        current_time_df : pd.DataFrame = pd.concat([current_time_df, time_df])
         write_to_excel(spreadsheet_name, sheetnames['sunrise_sunset_times'],current_time_df)
 
 

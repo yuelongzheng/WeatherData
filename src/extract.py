@@ -41,20 +41,20 @@ def get_uv_index_dataframe(datetime_index : pd.DatetimeIndex) -> pd.DataFrame:
         scrape_df : pd.DataFrame = tmp if scrape_df.empty else pd.concat([scrape_df, tmp])
     return scrape_df
 
-def create_query_string() -> str:
+def create_query_string(year : int) -> str:
     res = ""
     for detail in query_details:
         res += detail + "="
         if detail == "date":
-            res += str(dt.date.today().year)
+            res += str(year)
         else:
             res += location_details[detail]
         res += "&"
     return res[:-1]
 
-def get_sunrise_sunset_times_dataframe() -> pd.DataFrame:
+def get_sunrise_sunset_times_dataframe(year : int) -> pd.DataFrame:
     request = {"type":"sunrisenset",
-               "query": create_query_string()}
+               "query": create_query_string(year)}
     url = "https://api.geodesyapps.ga.gov.au/astronomical/submitRequest"
     try:
         response : Response = requests.post(url, json = request)
