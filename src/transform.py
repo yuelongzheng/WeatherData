@@ -1,16 +1,19 @@
 import pandas as pd
 import datetime as dt
 
-from extract import get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe
+from extract import get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe, parse_forecast_xml
 from logger import setup_logger
+from settings import LocationDetails
 
 current_date : dt.date = dt.date.today()
 spreadsheet_name : str = "WeatherData.xlsx"
 sheet_names : dict[str,str] = {"uv" : "UV Index Data",
-                              "sunrise_sunset_times" : "Sunrise Sunset Times"}
+                              "sunrise_sunset_times" : "Sunrise Sunset Times",
+                               'forecast' : 'Forecast'}
 sunrise_sunset_columns : dict[str,str] = {'month':"Month", 'day':'Day', 'rise':'Rise',
                                           'rise_day':'Rise_Day', 'set':'Set', 'set_day':'Set_Day'}
 logger = setup_logger(__name__)
+location_details = LocationDetails().model_dump()
 
 def check_spreadsheet_exists():
     empty = pd.DataFrame()
@@ -117,6 +120,31 @@ def update_sunrise_sunset_times():
         write_to_excel(spreadsheet_name, sheet_names['sunrise_sunset_times'],current_time_df)
 
 
+def transform_forcast_df(df : pd.DataFrame) -> pd.DataFrame:
+    df['Start Date Time'] = pd.to_datetime(df['start-time-local'],format='%Y-%m-%dT%H:%M:%S+' +
+                                            location_details['timezone'] + ":00" )
+    df['Start Date'] = pd.to_datetime(df['Start Date Time'].dt.date)
+    df = df.drop(columns=['start-time-local','end-time-local', 'Start Date Time'])
+    df['probability_of_precipitation'] = df['probability_of_precipitation'].str.replace('%', '')
+    df = df.rename(columns={'precis' : 'Condition',
+                            'probability_of_precipitation' : 'Probability of Rain',
+                            'precipitation_range' : 'Precipitation Range',
+                            'air_temperature_minimum' : 'Minimum Temperature',
+                            'air_temperature_maximum' : 'Maximum Temperature'})
+    df = df.dropna(subset=['Minimum Temperature','Maximum Temperature'])
+    df = df.astype({'Probability of Rain' : 'int32',
+                    'Minimum Temperature' : 'int32',
+                    'Maximum Temperature' : 'int32' })
+    return df
+
+    # print(df.loc[df['Start Date'] == df.loc[df.index[-1],'Start Date']].index.values)
+    # print(df.loc[df['Start Date'] == dt.date(2025,8,1)])
+
+def update_forcast_df():
+    df = parse_forecast_xml()
+    df = transform_forcast_df(df)
+    write_to_excel(spreadsheet_name, sheet_names['forecast'], df)
+
 def write_to_excel(filename,sheet_name,df):
     with pd.ExcelWriter(filename, engine='openpyxl', mode='a') as writer:
         workbook = writer.book
@@ -132,6 +160,7 @@ def main():
     check_spreadsheet_exists()
     update_uv_index_data()
     update_sunrise_sunset_times()
+    update_forcast_df()
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,6 @@ import sys
 import datetime as dt
 import pandas as pd
 import xml.etree.ElementTree as ET
-import json
 from requests import Response
 from settings import LocationDetails
 from logger import setup_logger
@@ -153,10 +152,10 @@ def get_radar_transparencies():
 
 def main():
     df = parse_forecast_xml()
-    print(df)
+    df['Start Date Time'] = pd.to_datetime(df['start-time-local'],format='%Y-%m-%dT%H:%M:%S+10:00')
+    df['Start Date'] = pd.to_datetime(df['Start Date Time'].dt.date)
     for column in df.columns:
         print(df.loc[df.index, column])
-    print(df.loc[df.index,['start-time-local','end-time-local']])
 
 if __name__ == "__main__":
     main()
