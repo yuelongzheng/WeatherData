@@ -47,12 +47,13 @@ def update_uv_index_data():
                                          current_uv_graph_df['Date'].iat[-1] + pd.Timedelta(days=1)
         start_date : dt.date = start_dateTime.date()
         datetime_index : pd.DatetimeIndex = pd.date_range(start_date, today_date)
-        scrape_df = get_uv_index_dataframe(datetime_index)
-        scrape_df = transform_uv_index_df(scrape_df)
-        scrape_df = pd.DataFrame(scrape_df[scrape_df['DateTime'] >= start_dateTime])
-        scrape_df.index = list(range(first_na_index, first_na_index + scrape_df.shape[0])) if first_na_index != 0 else \
-                          list(range(current_uv_graph_df.shape[0], current_uv_graph_df.shape[0] + scrape_df.shape[0]))
-        current_uv_graph_df = current_uv_graph_df.combine_first(scrape_df)
+        if not datetime_index.empty:
+            scrape_df = get_uv_index_dataframe(datetime_index)
+            scrape_df = transform_uv_index_df(scrape_df)
+            scrape_df = pd.DataFrame(scrape_df[scrape_df['DateTime'] >= start_dateTime])
+            scrape_df.index = list(range(first_na_index, first_na_index + scrape_df.shape[0])) if first_na_index != 0 else \
+                              list(range(current_uv_graph_df.shape[0], current_uv_graph_df.shape[0] + scrape_df.shape[0]))
+            current_uv_graph_df = current_uv_graph_df.combine_first(scrape_df)
     else:
         current_uv_graph_df = get_sydney_uv_index_data(today_date)
         current_uv_graph_df = transform_uv_index_df(current_uv_graph_df)
@@ -126,16 +127,20 @@ def transform_forcast_df(df : pd.DataFrame) -> pd.DataFrame:
     df['Start Date'] = pd.to_datetime(df['Start Date Time'].dt.date)
     df = df.drop(columns=['start-time-local','end-time-local', 'Start Date Time'])
     df['probability_of_precipitation'] = df['probability_of_precipitation'].str.replace('%', '')
+    df['precipitation_range'] = df['precipitation_range'].str.replace('to', '-').str.replace('mm', '')
     df = df.rename(columns={'precis' : 'Condition',
-                            'probability_of_precipitation' : 'Probability of Rain',
-                            'precipitation_range' : 'Precipitation Range',
-                            'air_temperature_minimum' : 'Minimum Temperature',
-                            'air_temperature_maximum' : 'Maximum Temperature'})
-    df = df.dropna(subset=['Minimum Temperature','Maximum Temperature'])
-    df = df.astype({'Probability of Rain' : 'int32',
-                    'Minimum Temperature' : 'int32',
-                    'Maximum Temperature' : 'int32' })
-    return df
+                            'probability_of_precipitation' : 'Probability of Rain (%)',
+                            'precipitation_range' : 'Precipitation Range (mm)',
+                            'air_temperature_minimum' : 'Minimum Temperature (°C)',
+                            'air_temperature_maximum' : 'Maximum Temperature (°C)'})
+    df = df.dropna(subset=['Minimum Temperature (°C)','Maximum Temperature (°C)'])
+    df = df.astype({'Probability of Rain (%)' : 'int32',
+                    'Minimum Temperature (°C)' : 'int32',
+                    'Maximum Temperature (°C)' : 'int32' })
+    melt_df = df.melt(id_vars = ['Start Date'], value_vars = ['Probability of Rain (%)', 'Precipitation Range (mm)',
+                                                              'Minimum Temperature (°C)', 'Maximum Temperature (°C)',
+                                                              'Condition'])
+    return melt_df
 
     # print(df.loc[df['Start Date'] == df.loc[df.index[-1],'Start Date']].index.values)
     # print(df.loc[df['Start Date'] == dt.date(2025,8,1)])
