@@ -16,7 +16,11 @@ sunrise_sunset_columns : dict[str,str] = {'month':"Month", 'day':'Day', 'rise':'
                                           'rise_day':'Rise_Day', 'set':'Set', 'set_day':'Set_Day'}
 logger = setup_logger(__name__)
 location_details = LocationDetails().model_dump()
-directions_degree_map = {'N' : 0 , 'NNE' : 15}
+# directions_degree_map = {'CALM' : 0 , 'NNE' : 22.5, 'NE' : 45, 'ENE' : 67.5, 'E' : 90,
+#                          'ESE' : 112.5, 'SE' : 135 , 'SSE' : 157.5, 'S' : 180, 'SSW' : 202.5,
+#                          'SW' : 225, 'WSW' : 247.5, 'W' : 270, 'WNW' : 292.5, 'NW' : 315,
+#                          'NNW' : 337.5, 'N' : 360}
+
 def check_spreadsheet_exists():
     empty = pd.DataFrame()
     try:
@@ -139,36 +143,40 @@ def transform_forcast_df(df : pd.DataFrame) -> pd.DataFrame:
                             'air_temperature_minimum' : 'Minimum Temperature (°C)',
                             'air_temperature_maximum' : 'Maximum Temperature (°C)'})
     df = df.dropna(subset=['Minimum Temperature (°C)','Maximum Temperature (°C)'])
-    df = df.astype({'Probability of Rain (%)' : 'int32',
-                    'Minimum Temperature (°C)' : 'int32',
-                    'Maximum Temperature (°C)' : 'int32' })
-    melt_df = df.melt(id_vars = ['Start Date'], value_vars = ['Probability of Rain (%)', 'Precipitation Range (mm)',
-                                                              'Minimum Temperature (°C)', 'Maximum Temperature (°C)',
-                                                              'Condition'])
-    return melt_df
+    df = df.set_index('Start Date',drop=False)
+    return df
 
 def update_forcast_df():
     df = parse_forecast_xml()
     df = transform_forcast_df(df)
-    print(df)
-    # write_to_excel(spreadsheet_name, sheet_names['forecast'], df)
+    current_forecast_df = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['forecast'])
+    current_forecast_df = current_forecast_df.pivot(index='Start Date', columns='Field', values='Value')
+    current_forecast_df = current_forecast_df.reset_index(names=['Start Date'])
+    current_forecast_df = current_forecast_df.set_index('Start Date', drop=False)
+    current_forecast_df = current_forecast_df.combine_first(df)
+    current_forecast_df = current_forecast_df.melt(id_vars = ['Start Date'],
+                                                   value_vars = ['Probability of Rain (%)', 'Precipitation Range (mm)',
+                                                                 'Minimum Temperature (°C)', 'Maximum Temperature (°C)',
+                                                                 'Condition'],
+                                                   value_name='Value',
+                                                   var_name='Field')
+    write_to_excel(spreadsheet_name, sheet_names['forecast'], current_forecast_df)
 
 def transform_observation_df(df : pd.DataFrame):
     df['Observation Date Time'] = pd.to_datetime(df['local_date_time_full'], format='%Y%m%d%H%M%S')
-    df['Observation Date Time Index'] = df['Observation Date Time']
     df['Observation Date'] = pd.to_datetime(df['Observation Date Time'].dt.date)
+    # df['Degrees'] = df['wind_dir'].map(directions_degree_map)
     df = df.drop(columns=['local_date_time_full'])
     df = df.astype({'rain_trace' : 'float64'})
-    df = df.set_index('Observation Date Time Index')
-    df = df[::-1]
+    df = df.set_index('Observation Date Time',drop=False)
     return df
 
 def update_observation_df():
     df : pd.DataFrame = get_observation_df()
     df = transform_observation_df(df)
     current_df = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['observation'])
-    current_df['Observation Date Time Index'] = current_df['Observation Date Time']
-    current_df = current_df.set_index('Observation Date Time Index')
+    # current_df['Degrees'] = current_df['wind_dir'].map(directions_degree_map)
+    current_df = current_df.set_index('Observation Date Time', drop=False)
     current_df = current_df.combine_first(df)
     write_to_excel(spreadsheet_name, sheet_names['observation'], current_df)
 
@@ -187,7 +195,7 @@ def main():
     check_spreadsheet_exists()
     update_uv_index_data()
     update_sunrise_sunset_times()
-    # update_forcast_df()
+    update_forcast_df()
     update_observation_df()
 
 if __name__ == "__main__":
