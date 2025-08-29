@@ -1,7 +1,8 @@
 import pandas as pd
 import datetime as dt
 
-from extract import get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe, parse_forecast_xml
+from extract import (get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe,
+                     parse_forecast_xml, get_observation_df)
 from logger import setup_logger
 from settings import LocationDetails
 
@@ -9,12 +10,13 @@ current_date : dt.date = dt.date.today()
 spreadsheet_name : str = "WeatherData.xlsx"
 sheet_names : dict[str,str] = {"uv" : "UV Index Data",
                               "sunrise_sunset_times" : "Sunrise Sunset Times",
-                               'forecast' : 'Forecast'}
+                               'forecast' : 'Forecast',
+                               'observation' : 'Observations'}
 sunrise_sunset_columns : dict[str,str] = {'month':"Month", 'day':'Day', 'rise':'Rise',
                                           'rise_day':'Rise_Day', 'set':'Set', 'set_day':'Set_Day'}
 logger = setup_logger(__name__)
 location_details = LocationDetails().model_dump()
-
+directions_degree_map = {'N' : 0 , 'NNE' : 15}
 def check_spreadsheet_exists():
     empty = pd.DataFrame()
     try:
@@ -127,7 +129,10 @@ def transform_forcast_df(df : pd.DataFrame) -> pd.DataFrame:
     df['Start Date'] = pd.to_datetime(df['Start Date Time'].dt.date)
     df = df.drop(columns=['start-time-local','end-time-local', 'Start Date Time'])
     df['probability_of_precipitation'] = df['probability_of_precipitation'].str.replace('%', '')
-    df['precipitation_range'] = df['precipitation_range'].str.replace('to', '-').str.replace('mm', '')
+    try:
+        df['precipitation_range'] = df['precipitation_range'].str.replace('to', '-').str.replace('mm', '')
+    except KeyError:
+        df['precipitation_range'] = ""
     df = df.rename(columns={'precis' : 'Condition',
                             'probability_of_precipitation' : 'Probability of Rain (%)',
                             'precipitation_range' : 'Precipitation Range (mm)',
@@ -142,13 +147,30 @@ def transform_forcast_df(df : pd.DataFrame) -> pd.DataFrame:
                                                               'Condition'])
     return melt_df
 
-    # print(df.loc[df['Start Date'] == df.loc[df.index[-1],'Start Date']].index.values)
-    # print(df.loc[df['Start Date'] == dt.date(2025,8,1)])
-
 def update_forcast_df():
     df = parse_forecast_xml()
     df = transform_forcast_df(df)
-    write_to_excel(spreadsheet_name, sheet_names['forecast'], df)
+    print(df)
+    # write_to_excel(spreadsheet_name, sheet_names['forecast'], df)
+
+def transform_observation_df(df : pd.DataFrame):
+    df['Observation Date Time'] = pd.to_datetime(df['local_date_time_full'], format='%Y%m%d%H%M%S')
+    df['Observation Date Time Index'] = df['Observation Date Time']
+    df['Observation Date'] = pd.to_datetime(df['Observation Date Time'].dt.date)
+    df = df.drop(columns=['local_date_time_full'])
+    df = df.astype({'rain_trace' : 'float64'})
+    df = df.set_index('Observation Date Time Index')
+    df = df[::-1]
+    return df
+
+def update_observation_df():
+    df : pd.DataFrame = get_observation_df()
+    df = transform_observation_df(df)
+    current_df = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['observation'])
+    current_df['Observation Date Time Index'] = current_df['Observation Date Time']
+    current_df = current_df.set_index('Observation Date Time Index')
+    current_df = current_df.combine_first(df)
+    write_to_excel(spreadsheet_name, sheet_names['observation'], current_df)
 
 def write_to_excel(filename,sheet_name,df):
     with pd.ExcelWriter(filename, engine='openpyxl', mode='a') as writer:
@@ -165,7 +187,8 @@ def main():
     check_spreadsheet_exists()
     update_uv_index_data()
     update_sunrise_sunset_times()
-    update_forcast_df()
+    # update_forcast_df()
+    update_observation_df()
 
 if __name__ == "__main__":
     main()

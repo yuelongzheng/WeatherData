@@ -3,6 +3,7 @@ import sys
 import datetime as dt
 import pandas as pd
 import xml.etree.ElementTree as ET
+
 from requests import Response
 from settings import LocationDetails
 from logger import setup_logger
@@ -101,19 +102,21 @@ def parse_forecast_xml() -> pd.DataFrame:
     df = df.drop(columns=drop_columns)
     return df
 
-def get_observation_df():
+
+def get_observation_df() -> pd.DataFrame:
     try:
         r = requests.get(location_details['station_observation_url'])
         r.raise_for_status()
         observations= r.json()['observations']['data']
-        df = pd.DataFrame(observations)
-        df = df[['local_date_time_full', 'apparent_t', 'cloud',
+        df : pd.DataFrame = pd.DataFrame(observations)
+        df : pd.DataFrame = df[['local_date_time_full', 'apparent_t', 'cloud',
                  'delta_t','gust_kmh','air_temp',
                  'dewpt', 'rain_trace', 'rel_hum',
                  'weather','wind_dir','wind_spd_kmh']]
         return df
     except Exception as err:
         logger.error(f'An error occurred in getting observation data: {err}')
+        sys.exit(1)
 
 
 def get_radar_images():
