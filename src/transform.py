@@ -2,7 +2,7 @@ import pandas as pd
 import datetime as dt
 
 from extract import (get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe,
-                     parse_forecast_xml, get_observation_df)
+                     parse_forecast_xml, get_hourly_observation_df)
 from logger import setup_logger
 from settings import LocationDetails
 
@@ -171,8 +171,8 @@ def transform_observation_df(df : pd.DataFrame):
     df = df.set_index('Observation Date Time',drop=False)
     return df
 
-def update_observation_df():
-    df : pd.DataFrame = get_observation_df()
+def update_hourly_observation_df():
+    df : pd.DataFrame = get_hourly_observation_df()
     df = transform_observation_df(df)
     current_df = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['observation'])
     # current_df['Degrees'] = current_df['wind_dir'].map(directions_degree_map)
@@ -196,7 +196,7 @@ def main():
     update_uv_index_data()
     update_sunrise_sunset_times()
     update_forcast_df()
-    update_observation_df()
+    update_hourly_observation_df()
 
 if __name__ == "__main__":
     main()

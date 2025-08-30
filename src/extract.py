@@ -5,13 +5,14 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 
 from requests import Response
-from settings import LocationDetails
+from settings import LocationDetails, scrape
 from logger import setup_logger
 from ftplib import FTP
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 
 location_details = LocationDetails().model_dump()
+scrape_details = scrape().model_dump()
 logger = setup_logger(__name__)
 query_details : list[str] = ["longdeg", "longmin", "latdeg",
                              "latmin", "location", "longhemi",
@@ -103,9 +104,9 @@ def parse_forecast_xml() -> pd.DataFrame:
     return df
 
 
-def get_observation_df() -> pd.DataFrame:
+def get_hourly_observation_df() -> pd.DataFrame:
     try:
-        r = requests.get(location_details['station_observation_url'])
+        r = requests.get(scrape_details['station_observation_url'])
         r.raise_for_status()
         observations= r.json()['observations']['data']
         df : pd.DataFrame = pd.DataFrame(observations)
@@ -153,12 +154,26 @@ def get_radar_transparencies():
         except Exception as err:
             logger.error(f'An error occurred in getting the radar transparencies : {err}')
 
+
+def get_daily_observation_df():
+    ftp_directory : str = scrape_details['daily_observation_directory']
+    file : str = scrape_details['station_name'] + '-202508.csv'
+    with FTP(ftp_server) as ftp:
+        ftp.login()
+        ftp.cwd(ftp_directory)
+        reader = BytesIO()
+        try:
+            ftp.retrbinary(f'RETR {file}', reader.write)
+            file_str = reader.getvalue().decode('utf-8', errors='ignore')
+            print(file_str.index('Station'))
+            df = pd.read_csv(StringIO(file_str[file_str.index('Station'):]))
+            print(df)
+        except Exception as err:
+            logger.error(f'An error occurred in getting daily observation file: {err}')
+            sys.exit(1)
+
 def main():
-    df = parse_forecast_xml()
-    df['Start Date Time'] = pd.to_datetime(df['start-time-local'],format='%Y-%m-%dT%H:%M:%S+10:00')
-    df['Start Date'] = pd.to_datetime(df['Start Date Time'].dt.date)
-    for column in df.columns:
-        print(df.loc[df.index, column])
+    get_daily_observation_df()
 
 if __name__ == "__main__":
     main()

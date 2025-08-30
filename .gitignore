@@ -1,4 +1,4 @@
-src/.locationdetails.env
+src/.*.env
 src/app.log
 src/*.xlsx
 src/*.xml

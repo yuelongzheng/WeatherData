@@ -12,8 +12,16 @@ class LocationDetails(BaseSettings):
     loc : str
     Event : str
     station : str
-    station_observation_url : str
 
     class Config:
         env_file= ".locationdetails.env"
         env_file_encoding = "utf-8"
+
+class scrape(BaseSettings):
+    station_observation_url : str
+    daily_observation_directory : str
+    station_name : str
+
+    class Config:
+        env_file='.scrape.env'
+        env_file_encoding = 'utf-8'
