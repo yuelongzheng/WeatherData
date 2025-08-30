@@ -155,25 +155,33 @@ def get_radar_transparencies():
             logger.error(f'An error occurred in getting the radar transparencies : {err}')
 
 
-def get_daily_observation_df():
+def get_daily_observation_df(year_month : str) -> pd.DataFrame:
     ftp_directory : str = scrape_details['daily_observation_directory']
-    file : str = scrape_details['station_name'] + '-202508.csv'
+    df : pd.DataFrame = pd.DataFrame()
     with FTP(ftp_server) as ftp:
         ftp.login()
         ftp.cwd(ftp_directory)
-        reader = BytesIO()
-        try:
-            ftp.retrbinary(f'RETR {file}', reader.write)
-            file_str = reader.getvalue().decode('utf-8', errors='ignore')
-            print(file_str.index('Station'))
-            df = pd.read_csv(StringIO(file_str[file_str.index('Station'):]))
-            print(df)
-        except Exception as err:
-            logger.error(f'An error occurred in getting daily observation file: {err}')
-            sys.exit(1)
+        file_list = ftp.nlst()[::-1][1:]
+        for file_name in file_list:
+            file_date = file_name[-10:-4]
+            if year_month > file_date:
+                break
+            str_io = StringIO()
+            reader = BytesIO()
+            try:
+                ftp.retrbinary(f'RETR {file_name}', reader.write)
+                file_str = reader.getvalue().decode('utf-8', errors='ignore')
+                str_io.write(file_str[file_str.index('Station'):])
+                str_io.seek(0)
+                temp_df : pd.DataFrame = pd.read_csv(str_io)
+                temp_df : pd.DataFrame = temp_df.dropna()
+                df = pd.concat([temp_df, df])
+            except Exception as err:
+                logger.error(f'An error occurred in getting daily observation file: {err}')
+                sys.exit(1)
+    return df
 
-def main():
-    get_daily_observation_df()
-
-if __name__ == "__main__":
-    main()
+# def main():
+#
+# if __name__ == "__main__":
+#     main()

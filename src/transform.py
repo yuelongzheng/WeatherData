@@ -1,8 +1,9 @@
 import pandas as pd
 import datetime as dt
+import numpy as np
 
 from extract import (get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe,
-                     parse_forecast_xml, get_hourly_observation_df)
+                     parse_forecast_xml, get_hourly_observation_df, get_daily_observation_df)
 from logger import setup_logger
 from settings import LocationDetails
 
@@ -11,7 +12,8 @@ spreadsheet_name : str = "WeatherData.xlsx"
 sheet_names : dict[str,str] = {"uv" : "UV Index Data",
                               "sunrise_sunset_times" : "Sunrise Sunset Times",
                                'forecast' : 'Forecast',
-                               'observation' : 'Observations'}
+                               'observation' : 'Observations',
+                               'daily observations' : 'Daily Observations'}
 sunrise_sunset_columns : dict[str,str] = {'month':"Month", 'day':'Day', 'rise':'Rise',
                                           'rise_day':'Rise_Day', 'set':'Set', 'set_day':'Set_Day'}
 logger = setup_logger(__name__)
@@ -150,9 +152,10 @@ def update_forcast_df():
     df = parse_forecast_xml()
     df = transform_forcast_df(df)
     current_forecast_df = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['forecast'])
-    current_forecast_df = current_forecast_df.pivot(index='Start Date', columns='Field', values='Value')
-    current_forecast_df = current_forecast_df.reset_index(names=['Start Date'])
-    current_forecast_df = current_forecast_df.set_index('Start Date', drop=False)
+    if not current_forecast_df.empty:
+        current_forecast_df = current_forecast_df.pivot(index='Start Date', columns='Field', values='Value')
+        current_forecast_df = current_forecast_df.reset_index(names=['Start Date'])
+        current_forecast_df = current_forecast_df.set_index('Start Date', drop=False)
     current_forecast_df = current_forecast_df.combine_first(df)
     current_forecast_df = current_forecast_df.melt(id_vars = ['Start Date'],
                                                    value_vars = ['Probability of Rain (%)', 'Precipitation Range (mm)',
@@ -176,9 +179,53 @@ def update_hourly_observation_df():
     df = transform_observation_df(df)
     current_df = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['observation'])
     # current_df['Degrees'] = current_df['wind_dir'].map(directions_degree_map)
-    current_df = current_df.set_index('Observation Date Time', drop=False)
+    if not current_df.empty:
+        current_df = current_df.set_index('Observation Date Time', drop=False)
     current_df = current_df.combine_first(df)
     write_to_excel(spreadsheet_name, sheet_names['observation'], current_df)
+
+
+def transform_daily_observation(df : pd.DataFrame):
+    df = df.drop(columns=['Station Name', '0900-0900.1'])
+    df = df.replace(' ', np.nan)
+    df = df.dropna()
+    df = df.astype({'0000-2400' : 'float32',
+                    '0900-0900' : 'float32',
+                    'Temperature' : 'float32',
+                    'Temperature.1' : 'float32',
+                    'Humidity' : 'int32',
+                    'Humidity.1' : 'int32',
+                    'Speed' : 'float32',
+                    'Radiation' : 'float32'})
+    df = df.rename(columns={'0000-2400' : 'Evapotranspiration',
+                       '0900-0900' : 'Rain',
+                       'Temperature' : 'Maximum Temperature (°C)',
+                       'Temperature.1' : 'Minimum Temperature (°C)',
+                       'Humidity' : 'Maximum Relative Humidity (%)',
+                       'Humidity.1' : 'Minimum Relative Humidity (%)',
+                       'Speed' : 'Average 10m Wind Speed (m/sec)',
+                       'Radiation' : 'Solar Radiation'})
+    df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%Y')
+    df = df.set_index('Date', drop=False)
+    return df
+
+def update_daily_observations_df():
+    current_df = pd.read_excel(spreadsheet_name, sheet_name=sheet_names['daily observations'])
+    if not current_df.empty:
+        current_df = current_df.set_index('Date', drop=False)
+    date = '0'
+    if not current_df.empty:
+        last_date = current_df['Date'].iat[-1]
+        last_month = str(last_date.month)
+        last_month = '0' + last_month if len(last_month) == 1 else last_month
+        last_year = str(last_date.year)
+        date = last_year + last_month
+    df = get_daily_observation_df(date)
+    df = transform_daily_observation(df)
+    df = df.set_index('Date', drop=False)
+    current_df = pd.concat([current_df, df])
+    write_to_excel(spreadsheet_name, sheet_names['daily observations'], current_df)
+
 
 def write_to_excel(filename,sheet_name,df):
     with pd.ExcelWriter(filename, engine='openpyxl', mode='a') as writer:
@@ -197,6 +244,7 @@ def main():
     update_sunrise_sunset_times()
     update_forcast_df()
     update_hourly_observation_df()
+    update_daily_observations_df()
 
 if __name__ == "__main__":
     main()
