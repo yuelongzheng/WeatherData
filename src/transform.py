@@ -1,6 +1,7 @@
+import time
 import pandas as pd
 import datetime as dt
-import numpy as np
+
 
 from extract import (get_sydney_uv_index_data, get_uv_index_dataframe, get_sunrise_sunset_times_dataframe,
                      parse_forecast_xml, get_hourly_observation_df, get_daily_observation_df)
@@ -187,8 +188,7 @@ def update_hourly_observation_df():
 
 def transform_daily_observation(df : pd.DataFrame):
     df = df.drop(columns=['Station Name', '0900-0900.1'])
-    df = df.replace(' ', np.nan)
-    df = df.dropna()
+    df = df.replace(' ', '0')
     df = df.astype({'0000-2400' : 'float32',
                     '0900-0900' : 'float32',
                     'Temperature' : 'float32',
@@ -239,12 +239,30 @@ def write_to_excel(filename,sheet_name,df):
 
 
 def main():
+    start = time.time()
     check_spreadsheet_exists()
+    end = time.time()
+    logger.info('Spread sheet check seconds taken: ' + str(end-start))
+    start = time.time()
     update_uv_index_data()
+    end = time.time()
+    logger.info('Update UV Index Data seconds taken: ' + str(end-start))
+    start = time.time()
     update_sunrise_sunset_times()
+    end = time.time()
+    logger.info('Update sunrise/sunset times seconds taken: ' + str(end-start))
+    start = time.time()
     update_forcast_df()
+    end = time.time()
+    logger.info('Update forecast seconds taken: ' + str(end-start))
+    start = time.time()
     update_hourly_observation_df()
+    end = time.time()
+    logger.info('Update hourly observations seconds taken: ' + str(end-start))
+    start = time.time()
     update_daily_observations_df()
+    end = time.time()
+    logger.info('Update daily observations seconds taken: ' + str(end-start))
 
 if __name__ == "__main__":
     main()
