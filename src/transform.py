@@ -237,32 +237,19 @@ def write_to_excel(filename,sheet_name,df):
         finally:
             df.to_excel(writer, sheet_name=sheet_name,index= False)
 
+def execute_and_time(function):
+    start = time.time()
+    function()
+    end = time.time()
+    logger.info(function.__name__ + ' seconds taken: ' + str(end - start))
 
 def main():
-    start = time.time()
-    check_spreadsheet_exists()
-    end = time.time()
-    logger.info('Spread sheet check seconds taken: ' + str(end-start))
-    start = time.time()
-    update_uv_index_data()
-    end = time.time()
-    logger.info('Update UV Index Data seconds taken: ' + str(end-start))
-    start = time.time()
-    update_sunrise_sunset_times()
-    end = time.time()
-    logger.info('Update sunrise/sunset times seconds taken: ' + str(end-start))
-    start = time.time()
-    update_forcast_df()
-    end = time.time()
-    logger.info('Update forecast seconds taken: ' + str(end-start))
-    start = time.time()
-    update_hourly_observation_df()
-    end = time.time()
-    logger.info('Update hourly observations seconds taken: ' + str(end-start))
-    start = time.time()
-    update_daily_observations_df()
-    end = time.time()
-    logger.info('Update daily observations seconds taken: ' + str(end-start))
+    execute_and_time(check_spreadsheet_exists)
+    execute_and_time(update_uv_index_data)
+    execute_and_time(update_sunrise_sunset_times)
+    execute_and_time(update_forcast_df)
+    execute_and_time(update_hourly_observation_df)
+    execute_and_time(update_daily_observations_df)
 
 if __name__ == "__main__":
     main()

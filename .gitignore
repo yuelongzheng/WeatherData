@@ -4,3 +4,4 @@ src/*.xlsx
 src/*.xml
 src/*.*.json
 /resources
+src/*.sh
