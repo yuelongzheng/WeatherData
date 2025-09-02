@@ -11,7 +11,6 @@ class LocationDetails(BaseSettings):
     timezone : str
     loc : str
     Event : str
-    station : str
 
     class Config:
         env_file= ".locationdetails.env"
@@ -20,7 +19,7 @@ class LocationDetails(BaseSettings):
 class scrape(BaseSettings):
     station_observation_url : str
     daily_observation_directory : str
-    station_name : str
+    station : str
 
     class Config:
         env_file='.scrape.env'

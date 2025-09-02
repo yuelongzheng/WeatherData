@@ -89,7 +89,7 @@ def parse_forecast_xml() -> pd.DataFrame:
     forecasts = root.find('forecast')
     forecast_area : ET.Element = ET.Element('None')
     for area in forecasts:
-        if area.attrib['description'] == location_details['station']:
+        if area.attrib['description'] == scrape_details['station']:
             forecast_area = area
     list_of_dict = []
     for forecast_period in forecast_area:
